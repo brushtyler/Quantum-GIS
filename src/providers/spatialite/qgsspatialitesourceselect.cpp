@@ -18,10 +18,11 @@ email                : a.furieri@lqt.it
 
 #include "qgsspatialitesourceselect.h"
 
-#include "qgisapp.h"
 #include "qgslogger.h"
 #include "qgsapplication.h"
 #include "qgscontexthelp.h"
+#include "qgsspatialiteconnection.h"
+//#include "qgsspatialiteprovider.h"
 #include "qgsquerybuilder.h"
 #include "qgsdatasourceuri.h"
 #include "qgsvectorlayer.h"
@@ -39,8 +40,10 @@ email                : a.furieri@lqt.it
 #define strcasecmp(a,b) stricmp(a,b)
 #endif
 
-QgsSpatiaLiteSourceSelect::QgsSpatiaLiteSourceSelect( QgisApp * app, Qt::WFlags fl ):
-    QDialog( app, fl ), qgisApp( app )
+QgsSpatiaLiteSourceSelect::QgsSpatiaLiteSourceSelect( QWidget *parent, Qt::WFlags fl, bool managerMode, bool embeddedMode )
+  : QDialog( parent, fl )
+  , mManagerMode( managerMode )
+  , mEmbeddedMode( embeddedMode )
 {
   setupUi( this );
   setWindowTitle( tr( "Add SpatiaLite Table(s)" ) );
@@ -49,15 +52,26 @@ QgsSpatiaLiteSourceSelect::QgsSpatiaLiteSourceSelect( QgisApp * app, Qt::WFlags 
   btnSave->hide();
   btnLoad->hide();
 
+  if ( mEmbeddedMode )
+  {
+    buttonBox->button( QDialogButtonBox::Close )->hide();
+  }
+
   mAddButton = new QPushButton( tr( "&Add" ) );
-  buttonBox->addButton( mAddButton, QDialogButtonBox::ActionRole );
-  connect( mAddButton, SIGNAL( clicked() ), this, SLOT( addClicked() ) );
   mAddButton->setEnabled( false );
 
-  mBuildQueryButton = new QPushButton( tr( "&Build Query" ) );
-  buttonBox->addButton( mBuildQueryButton, QDialogButtonBox::ActionRole );
-  connect( mBuildQueryButton, SIGNAL( clicked() ), this, SLOT( buildQuery() ) );
-  mBuildQueryButton->setEnabled( false );
+  mBuildQueryButton = new QPushButton( tr( "&Build query" ) );
+  mBuildQueryButton->setToolTip( tr( "Build query" ) );
+  mBuildQueryButton->setDisabled( true );
+
+  if ( !mManagerMode )
+  {
+    buttonBox->addButton( mAddButton, QDialogButtonBox::ActionRole );
+    connect( mAddButton, SIGNAL( clicked() ), this, SLOT( addTables() ) );
+
+    buttonBox->addButton( mBuildQueryButton, QDialogButtonBox::ActionRole );
+    connect( mBuildQueryButton, SIGNAL( clicked() ), this, SLOT( buildQuery() ) );
+  }
 
   populateConnectionList();
 
@@ -78,9 +92,21 @@ QgsSpatiaLiteSourceSelect::QgsSpatiaLiteSourceSelect( QgisApp * app, Qt::WFlags 
   mTablesTreeView->setModel( &mProxyModel );
   mTablesTreeView->setSortingEnabled( true );
 
+  QSettings settings;
+  mTablesTreeView->setSelectionMode( settings.value( "/qgis/addPostgisDC", false ).toBool() ?
+                                     QAbstractItemView::ExtendedSelection :
+                                     QAbstractItemView::MultiSelection );
+
   //for Qt < 4.3.2, passing -1 to include all model columns
   //in search does not seem to work
   mSearchColumnComboBox->setCurrentIndex( 1 );
+
+  restoreGeometry( settings.value( "/Windows/SlSourceSelect/geometry" ).toByteArray() );
+
+  for ( int i = 0; i < mTableModel.columnCount(); i++ )
+  {
+    mTablesTreeView->setColumnWidth( i, settings.value( QString( "/Windows/SlSourceSelect/columnWidths/%1" ).arg( i ), mTablesTreeView->columnWidth( i ) ).toInt() );
+  }
 
   //hide the search options by default
   //they will be shown when the user ticks
@@ -95,18 +121,15 @@ QgsSpatiaLiteSourceSelect::QgsSpatiaLiteSourceSelect( QgisApp * app, Qt::WFlags 
   cbxAllowGeometrylessTables->setDisabled( true );
 }
 
-// Slot for performing action when the Add button is clicked
-void QgsSpatiaLiteSourceSelect::addClicked()
+QgsSpatiaLiteSourceSelect::~QgsSpatiaLiteSourceSelect()
 {
-  addTables();
 }
-
-/** End Autoconnected SLOTS **/
 
 // Remember which database is selected
 void QgsSpatiaLiteSourceSelect::on_cmbConnections_activated( int )
 {
-  dbChanged();
+  // Remember which database was selected.
+  QgsSpatiaLiteConnection::setSelectedConnection( cmbConnections->currentText() );
 }
 
 void QgsSpatiaLiteSourceSelect::buildQuery()
@@ -301,25 +324,18 @@ void QgsSpatiaLiteSourceSelect::closeSpatiaLiteDb( sqlite3 * handle )
 
 void QgsSpatiaLiteSourceSelect::populateConnectionList()
 {
-  QSettings settings;
-  settings.beginGroup( "/SpatiaLite/connections" );
-  QStringList keys = settings.childGroups();
+  QStringList keys = QgsSpatiaLiteConnection::connectionList();
   QStringList::Iterator it = keys.begin();
   cmbConnections->clear();
   while ( it != keys.end() )
   {
-    // retrieving the SQLite DB name and full path
-    QString text = *it + tr( "@" );
-    text += settings.value( *it + "/sqlitepath", "###unknown###" ).toString();
-    cmbConnections->addItem( text );
+    cmbConnections->addItem( *it );
     ++it;
   }
-  settings.endGroup();
   setConnectionListPosition();
 
-  btnConnect->setDisabled( cmbConnections->count() == 0 );
   btnDelete->setDisabled( cmbConnections->count() == 0 );
-
+  btnConnect->setDisabled( cmbConnections->count() == 0 );
   cmbConnections->setDisabled( cmbConnections->count() == 0 );
 }
 
@@ -350,13 +366,13 @@ void QgsSpatiaLiteSourceSelect::on_btnNew_clicked()
 
   // Persist last used SpatiaLite dir
   settings.setValue( "/UI/lastSpatiaLiteDir", myPath );
+
   // inserting this SQLite DB path
-  QString baseKey = "/SpatiaLite/connections/";
-  settings.setValue( baseKey + "selected", myName );
-  baseKey += myName;
-  settings.setValue( baseKey + "/sqlitepath", myFI.canonicalFilePath() );
+  QgsSpatiaLiteConnection::saveConnection( myName, myFI.canonicalFilePath() );
+  QgsSpatiaLiteConnection::setSelectedConnection( myName );
 
   populateConnectionList();
+  emit connectionsChanged();
 }
 
 QString QgsSpatiaLiteSourceSelect::layerURI( const QModelIndex &index )
@@ -404,66 +420,52 @@ QString QgsSpatiaLiteSourceSelect::layerURI( const QModelIndex &index )
 // Slot for deleting an existing connection
 void QgsSpatiaLiteSourceSelect::on_btnDelete_clicked()
 {
-  QSettings settings;
   QString subKey = cmbConnections->currentText();
   int idx = subKey.indexOf( "@" );
   if ( idx > 0 )
     subKey.truncate( idx );
 
-  QString key = "/SpatiaLite/connections/" + subKey;
   QString msg = tr( "Are you sure you want to remove the %1 connection and all associated settings?" ).arg( subKey );
   QMessageBox::StandardButton result =
     QMessageBox::information( this, tr( "Confirm Delete" ), msg, QMessageBox::Ok | QMessageBox::Cancel );
   if ( result != QMessageBox::Ok )
     return;
 
-  settings.remove( key + "/sqlitepath" );
-  settings.remove( key );
-
+  QgsSpatiaLiteConnection::deleteConnection( cmbConnections->currentText() );
   populateConnectionList();
+  emit connectionsChanged();
 }
 
 void QgsSpatiaLiteSourceSelect::addTables()
 {
+  QgsDebugMsg( "Entered" );
   m_selectedTables.clear();
-
-  typedef QMap < int, bool >schemaInfo;
-  QMap < QString, schemaInfo > dbInfo;
 
   QItemSelection selection = mTablesTreeView->selectionModel()->selection();
   QModelIndexList selectedIndices = selection.indexes();
-  QStandardItem *currentItem = 0;
-
   QModelIndexList::const_iterator selected_it = selectedIndices.constBegin();
   for ( ; selected_it != selectedIndices.constEnd(); ++selected_it )
   {
-    if ( !selected_it->parent().isValid() )
+    if ( !selected_it->parent().isValid() || selected_it->column() > 0 )
     {
       //top level items only contain the schema names
       continue;
     }
-    currentItem = mTableModel.itemFromIndex( mProxyModel.mapToSource( *selected_it ) );
-    if ( !currentItem )
-    {
-      continue;
-    }
 
-    QString currentSchemaName = currentItem->parent()->text();
-
-    int currentRow = currentItem->row();
-    if ( !dbInfo[currentSchemaName].contains( currentRow ) )
-    {
-      dbInfo[currentSchemaName][currentRow] = true;
-      m_selectedTables << layerURI( mProxyModel.mapToSource( *selected_it ) );
-    }
+    QModelIndex index = mProxyModel.mapToSource( *selected_it );
+    m_selectedTables << layerURI( index );
+    QgsDebugMsg( "added table" );
   }
 
   if ( m_selectedTables.empty() )
   {
-    QMessageBox::information( this, tr( "Select Table" ), tr( "You must select a table in order to add a Layer." ) );
+    QgsDebugMsg( "is empty!" );
+    QMessageBox::information( this, tr( "Select Table" ), tr( "You must select a table in order to add a layer." ) );
   }
   else
   {
+    QgsDebugMsg( "before emit" );
+    emit addDatabaseLayers( m_selectedTables, "spatialite" );
     accept();
   }
 }
@@ -474,13 +476,16 @@ void QgsSpatiaLiteSourceSelect::on_btnConnect_clicked()
 
   cbxAllowGeometrylessTables->setEnabled( false );
 
-  QSettings settings;
-  QString subKey = cmbConnections->currentText();
-  int idx = subKey.indexOf( "@" );
-  if ( idx > 0 )
-    subKey.truncate( idx );
+  // populate the table list
+  QgsSpatiaLiteConnection connection( cmbConnections->currentText() );
+  QgsDataSourceURI uri( connection.connectionInfo() );
 
-  QFileInfo fi( settings.value( QString( "/SpatiaLite/connections/%1/sqlitepath" ).arg( subKey ) ).toString() );
+  QgsDebugMsg( "Connection info: " + uri.connectionInfo() );
+
+  m_connInfo = uri.connectionInfo();
+  mSqlitePath = uri.database();
+
+  QFileInfo fi( mSqlitePath );
 
   if ( !fi.exists() )
     // db doesn't exists
@@ -531,7 +536,7 @@ QStringList QgsSpatiaLiteSourceSelect::selectedTables()
 
 QString QgsSpatiaLiteSourceSelect::connectionInfo()
 {
-  return QString( "dbname='%1'" ).arg( QString( mSqlitePath ).replace( "'", "\\'" ) );
+  return m_connInfo;
 }
 
 void QgsSpatiaLiteSourceSelect::setSql( const QModelIndex &index )
@@ -690,6 +695,8 @@ error:
     errCause = errMsg;
     sqlite3_free( errMsg );
   }
+
+  QApplication::restoreOverrideCursor();
   QMessageBox::critical( this, tr( "SpatiaLite getTableInfo Error" ),
                          tr( "Failure exploring tables from: %1\n\n%2" ).arg( mSqlitePath ).arg( errCause ) );
   return false;
@@ -904,13 +911,6 @@ QString QgsSpatiaLiteSourceSelect::fullDescription( QString table, QString colum
   QString full_desc = "";
   full_desc += table + "\" (" + column + ") " + type;
   return full_desc;
-}
-
-void QgsSpatiaLiteSourceSelect::dbChanged()
-{
-  // Remember which database was selected.
-  QSettings settings;
-  settings.setValue( "/SpatiaLite/connections/selected", cmbConnections->currentText() );
 }
 
 void QgsSpatiaLiteSourceSelect::setConnectionListPosition()

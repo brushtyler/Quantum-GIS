@@ -457,15 +457,15 @@ class QgisApp : public QMainWindow, private Ui::MainWindow
     //! Add a raster layer to the map (will prompt user for file name using dlg )
     void addRasterLayer();
     //#ifdef HAVE_POSTGRESQL
-    //! Add a databaselayer to the map
-    void addDatabaseLayer();
+    //! Add a postgres layer to the map
+    void addPostgresLayer();
     //#endif
-	//! Add a list of database layers to the map
-    void addDatabaseLayers( QStringList const & layerPathList, QString const & providerKey );
     //#ifdef HAVE_SPATIALITE
     //! Add a SpatiaLite layer to the map
     void addSpatiaLiteLayer();
     //#endif
+    //! Add a list of database layers to the map
+    void addDatabaseLayers( QStringList const & layerPathList, QString const & providerKey );
     /** toggles whether the current selected layer is in overview or not */
     void isInOverview();
     //! Slot to show the map coordinate position of the mouse cursor
@@ -822,6 +822,9 @@ class QgisApp : public QMainWindow, private Ui::MainWindow
      * It won't force a refresh.
      */
     bool addRasterLayer( QgsRasterLayer * theRasterLayer );
+
+    /** Show the source select dialog getting it from the provider */
+    void showDatabaseSelectDialog( QString providerName, QString providerType );
 
     /** add this file to the recently opened/saved projects list
      *  pass settings by reference since creating more than one

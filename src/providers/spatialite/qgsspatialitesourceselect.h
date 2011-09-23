@@ -1,5 +1,5 @@
 /***************************************************************************
-                          qgspatialitesourceselect.h  -  description
+                          qgsspatialitesourceselect.h  -  description
                              -------------------
     begin                : Dec 2008
     copyright            : (C) 2008 by Sandro Furieri
@@ -39,7 +39,6 @@ extern "C"
 #include <QFileDialog>
 
 class QStringList;
-class QTableWidgetItem;
 class QgisApp;
 class QPushButton;
 
@@ -57,27 +56,30 @@ class QgsSpatiaLiteSourceSelect: public QDialog, private Ui::QgsDbSourceSelectBa
   public:
 
     //! Constructor
-    QgsSpatiaLiteSourceSelect( QgisApp * app, Qt::WFlags fl = QgisGui::ModalDialogFlags );
+    QgsSpatiaLiteSourceSelect( QWidget *parent = 0, Qt::WFlags fl = QgisGui::ModalDialogFlags, bool managerMode = false, bool embeddedMode = false );
     //! Destructor
-    ~QgsSpatiaLiteSourceSelect() {}
+    ~QgsSpatiaLiteSourceSelect();
     //! Populate the connection list combo box
     void populateConnectionList();
-    //! Determines the tables the user selected and closes the dialog
-    void addTables();
     //! String list containing the selected tables
     QStringList selectedTables();
     //! Connection info (DB-path)
     QString connectionInfo();
-    // Store the selected database
-    void dbChanged();
+
+  signals:
+    void addDatabaseLayers( QStringList const & layerPathList,
+                            QString const & providerKey );
+    void connectionsChanged();
 
   public slots:
+    //! Determines the tables the user selected and closes the dialog
+    void addTables();
+    void buildQuery();
+
     /*! Connects to the database using the stored connection parameters.
      * Once connected, available layers are displayed.
      */
     void on_btnConnect_clicked();
-    void buildQuery();
-    void addClicked();
     //! Opens the create connection dialog to build a new connection
     void on_btnNew_clicked();
     //! Deletes the selected connection
@@ -107,6 +109,12 @@ class QgsSpatiaLiteSourceSelect: public QDialog, private Ui::QgsDbSourceSelectBa
 
     typedef std::pair < QString, QString > geomPair;
     typedef std::list < geomPair > geomCol;
+
+    //! Connections manager mode
+    bool mManagerMode;
+
+    //! Embedded mode, without 'Close'
+    bool mEmbeddedMode;
 
     /**Checks if geometry_columns_auth table exists*/
     bool checkGeometryColumnsAuth( sqlite3 * handle );
@@ -142,11 +150,11 @@ class QgsSpatiaLiteSourceSelect: public QDialog, private Ui::QgsDbSourceSelectBa
     // The column labels
     QStringList mColumnLabels;
     QString mSqlitePath;
+    QString m_connInfo;
     QStringList m_selectedTables;
     // Storage for the range of layer type icons
     QMap < QString, QPair < QString, QIcon > >mLayerIcons;
-    //! Pointer to the qgis application mainwindow
-    QgisApp *qgisApp;
+
     //! Model that acts as datasource for mTableTreeWidget
     QgsSpatiaLiteTableModel mTableModel;
     QgsDbFilterProxyModel mProxyModel;

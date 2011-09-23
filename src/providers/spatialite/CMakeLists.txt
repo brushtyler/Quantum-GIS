@@ -2,9 +2,18 @@
 ########################################################
 # Files
 
-SET(SPATIALITE_SRCS qgsspatialiteprovider.cpp)
-
-SET(SPATIALITE_MOC_HDRS qgsspatialiteprovider.h)
+SET(SPATIALITE_SRCS 
+    qgsspatialiteprovider.cpp
+    qgsspatialiteconnection.cpp
+    qgsspatialitesourceselect.cpp
+    qgsspatialitetablemodel.cpp
+)
+SET(SPATIALITE_MOC_HDRS 
+    qgsspatialiteprovider.h
+    qgsspatialiteconnection.h
+    qgsspatialitesourceselect.h
+    qgsspatialitetablemodel.h
+)
 
 
 ########################################################
@@ -12,8 +21,13 @@ SET(SPATIALITE_MOC_HDRS qgsspatialiteprovider.h)
 
 QT4_WRAP_CPP(SPATIALITE_MOC_SRCS ${SPATIALITE_MOC_HDRS})
 
-
-INCLUDE_DIRECTORIES(../../core)
+INCLUDE_DIRECTORIES(
+  ../../core
+  ${GEOS_INCLUDE_DIR}
+  ../../gui
+  ../../app
+  ${CMAKE_CURRENT_BINARY_DIR}/../../ui
+)
 
 IF(WITH_INTERNAL_SPATIALITE)
   INCLUDE_DIRECTORIES(
@@ -23,8 +37,6 @@ IF(WITH_INTERNAL_SPATIALITE)
 ELSE(WITH_INTERNAL_SPATIALITE)
   INCLUDE_DIRECTORIES(${SPATIALITE_INCLUDE_DIR})
 ENDIF(WITH_INTERNAL_SPATIALITE)
-
-INCLUDE_DIRECTORIES(${GEOS_INCLUDE_DIR})
 
 ADD_LIBRARY (spatialiteprovider MODULE ${SPATIALITE_SRCS} ${SPATIALITE_MOC_SRCS})
 

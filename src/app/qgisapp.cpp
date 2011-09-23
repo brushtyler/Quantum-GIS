@@ -238,7 +238,6 @@ extern "C"
 {
 #include <spatialite.h>
 }
-#include "spatialite/qgsspatialitesourceselect.h"
 #include "spatialite/qgsnewspatialitelayerdialog.h"
 #endif
 
@@ -815,7 +814,7 @@ void QgisApp::createActions()
   connect( mActionEmbedLayers, SIGNAL( triggered() ) , this, SLOT( embedLayers() ) );
   connect( mActionAddOgrLayer, SIGNAL( triggered() ), this, SLOT( addVectorLayer() ) );
   connect( mActionAddRasterLayer, SIGNAL( triggered() ), this, SLOT( addRasterLayer() ) );
-  connect( mActionAddPgLayer, SIGNAL( triggered() ), this, SLOT( addDatabaseLayer() ) );
+  connect( mActionAddPgLayer, SIGNAL( triggered() ), this, SLOT( addPostgresLayer() ) );
   connect( mActionAddSpatiaLiteLayer, SIGNAL( triggered() ), this, SLOT( addSpatiaLiteLayer() ) );
   connect( mActionAddWmsLayer, SIGNAL( triggered() ), this, SLOT( addWmsLayer() ) );
   connect( mActionOpenTable, SIGNAL( triggered() ), this, SLOT( attributeTable() ) );
@@ -2314,30 +2313,42 @@ void QgisApp::loadOGRSublayers( QString layertype, QString uri, QStringList list
 }
 
 #ifndef HAVE_POSTGRESQL
-void QgisApp::addDatabaseLayer() {}
+void QgisApp::addPostgresLayer() {}
 #else
-void QgisApp::addDatabaseLayer()
+void QgisApp::addPostgresLayer()
+{
+  showDatabaseSelectDialog( tr( "PostgreSQL" ), "postgres" );
+} // QgisApp::addPostgresLayer()
+#endif
+
+#ifndef HAVE_SPATIALITE
+void QgisApp::addSpatiaLiteLayer() {}
+#else
+void QgisApp::addSpatiaLiteLayer()
+{
+  showDatabaseSelectDialog( tr( "SpatiaLite" ), "spatialite" );
+} // QgisApp::addSpatiaLiteLayer()
+#endif
+
+void QgisApp::showDatabaseSelectDialog( QString providerName, QString providerKey )
 {
   if ( mMapCanvas && mMapCanvas->isDrawing() )
   {
     return;
   }
-  // Fudge for now
-  QgsDebugMsg( "about to addRasterLayer" );
 
   // TODO: QDialog for now, switch to QWidget in future
-  QDialog *pgs = dynamic_cast<QDialog*>( QgsProviderRegistry::instance()->selectWidget( QString( "postgres" ), this ) );
-  if ( !pgs )
+  QDialog *srcsel = dynamic_cast<QDialog*>( QgsProviderRegistry::instance()->selectWidget( providerKey, this ) );
+  if ( !srcsel )
   {
-    QMessageBox::warning( this, tr( "PostgreSQL" ), tr( "Cannot get PostgreSQL select dialog from provider." ) );
+    QMessageBox::warning( this, providerName, tr( "Cannot get %1 select dialog from provider." ).arg( providerName ) );
     return;
   }
-  connect( pgs , SIGNAL( addDatabaseLayers( QStringList const &, QString const & ) ),
+  connect( srcsel, SIGNAL( addDatabaseLayers( QStringList const &, QString const & ) ),
            this , SLOT( addDatabaseLayers( QStringList const &, QString const & ) ) );
-  pgs->exec();
-  delete pgs;
-} // QgisApp::addDatabaseLayer()
-#endif
+  srcsel->exec();
+  delete srcsel;
+}
 
 void QgisApp::addDatabaseLayers( QStringList const & layerPathList, QString const & providerKey )
 {
@@ -2402,76 +2413,6 @@ void QgisApp::addDatabaseLayers( QStringList const & layerPathList, QString cons
   QApplication::restoreOverrideCursor();
 }
 
-
-#ifndef HAVE_SPATIALITE
-void QgisApp::addSpatiaLiteLayer() {}
-#else
-void QgisApp::addSpatiaLiteLayer()
-{
-  if ( mMapCanvas && mMapCanvas->isDrawing() )
-  {
-    return;
-  }
-
-  // show the SpatiaLite dialog
-
-  QgsSpatiaLiteSourceSelect *dbs = new QgsSpatiaLiteSourceSelect( this );
-
-  mMapCanvas->freeze();
-
-  if ( dbs->exec() )
-  {
-// Let render() do its own cursor management
-//    QApplication::setOverrideCursor(Qt::WaitCursor);
-
-
-    // repaint the canvas if it was covered by the dialog
-
-    // add files to the map canvas
-    QStringList tables = dbs->selectedTables();
-
-    QApplication::setOverrideCursor( Qt::WaitCursor );
-
-    // for each selected table, connect to the database and build a canvasitem for it
-    QStringList::Iterator it = tables.begin();
-    while ( it != tables.end() )
-    {
-      // create the layer
-      QgsDataSourceURI uri( *it );
-      QgsVectorLayer *layer = new QgsVectorLayer( uri.uri(), uri.table(), "spatialite" );
-      if ( layer->isValid() )
-      {
-        // register this layer with the central layers registry
-        QgsMapLayerRegistry::instance()->addMapLayer( layer );
-      }
-      else
-      {
-        QgsDebugMsg(( *it ) + " is an invalid layer - not loaded" );
-        QMessageBox::critical( this, tr( "Invalid Layer" ), tr( "%1 is an invalid layer and cannot be loaded." ).arg( *it ) );
-        delete layer;
-      }
-      //qWarning("incrementing iterator");
-      ++it;
-    }
-
-    QApplication::restoreOverrideCursor();
-
-    statusBar()->showMessage( mMapCanvas->extent().toString( 2 ) );
-  }
-  delete dbs;
-
-  // update UI
-  qApp->processEvents();
-
-  // draw the map
-  mMapCanvas->freeze( false );
-  mMapCanvas->refresh();
-
-// Let render() do its own cursor management
-//  QApplication::restoreOverrideCursor();
-
-} // QgisApp::addSpatiaLiteLayer()
-#endif
 
 void QgisApp::addWmsLayer()
 {

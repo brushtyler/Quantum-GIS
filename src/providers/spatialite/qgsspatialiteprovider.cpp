@@ -14,7 +14,6 @@ email                : a.furieri@lqt.it
  *                                                                         *
  ***************************************************************************/
 
-#include <qgis.h>
 #include <qgsapplication.h>
 #include <qgsfeature.h>
 #include <qgsfield.h>
@@ -24,6 +23,7 @@ email                : a.furieri@lqt.it
 #include <qgscoordinatereferencesystem.h>
 
 #include "qgsspatialiteprovider.h"
+#include "qgsspatialitesourceselect.h"
 
 #include "qgslogger.h"
 
@@ -4509,4 +4509,9 @@ QGISEXTERN QString description()
 QGISEXTERN bool isProvider()
 {
   return true;
+}
+// ---------------------------------------------------------------------------
+QGISEXTERN QgsSpatiaLiteSourceSelect * selectWidget( QWidget * parent, Qt::WFlags fl )
+{
+  return new QgsSpatiaLiteSourceSelect( parent, fl );
 }
