@@ -675,6 +675,11 @@ QgsPostgresProvider::Conn *QgsPostgresProvider::Conn::connectDb( const QString &
                         "GEOS support (http://geos.refractions.net)" ) );
   }
 
+  if ( conn->hasTopology() )
+  {
+    QgsDebugMsg( "Topology support available!" );
+  }
+
 
 
   return conn;
@@ -3002,9 +3007,22 @@ bool QgsPostgresProvider::Conn::hasGEOS()
   return geosAvailable;
 }
 
+/**
+ * Check to see if topology is available
+ */
+bool QgsPostgresProvider::Conn::hasTopology()
+{
+  // make sure info is up to date for the current connection
+  postgisVersion();
+  // get topology capability
+  return topologyAvailable;
+}
+
 /* Functions for determining available features in postGIS */
 QString QgsPostgresProvider::Conn::postgisVersion()
 {
+  if ( gotPostgisVersion ) return postgisVersionInfo;
+
   postgresqlVersion = PQserverVersion( conn );
 
   Result result = PQexec( "select postgis_version()" );
@@ -3066,6 +3084,18 @@ QString QgsPostgresProvider::Conn::postgisVersion()
     if ( proj.size() == 1 )
     {
       projAvailable = ( proj[0].indexOf( "=1" ) > -1 );
+    }
+  }
+
+  // checking for topology support
+  QgsDebugMsg( "Checking for topology support" );
+  topologyAvailable = false;
+  if ( postgisVersionMajor > 1 )
+  {
+    Result result = PQexec( "select count(c.oid) from pg_class as c join pg_namespace as n on c.relnamespace = n.oid where n.nspname = 'topology' and c.relname = 'topology'" );
+    if ( PQntuples( result ) >= 1 )
+    {
+      topologyAvailable = true;
     }
   }
 
