@@ -303,7 +303,7 @@ QString QgsSymbolV2::dump()
 
 void QgsSymbolV2::toSld( QDomDocument &doc, QDomElement &element, QgsStringMap props ) const
 {
-  props[ "alpha" ] = QString::number( alpha() );
+  props[ "alpha" ] = QString::number( mAlpha * props.value( "alpha", "1.0" ).toDouble() );
   double scaleFactor = 1.0;
   props[ "uom" ] = QgsSymbolLayerV2Utils::encodeSldUom( outputUnit(), &scaleFactor );
   props[ "uomScale" ] = scaleFactor != 1 ? QString::number( scaleFactor ) : "";

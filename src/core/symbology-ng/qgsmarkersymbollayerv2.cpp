@@ -95,8 +95,8 @@ void QgsSimpleMarkerSymbolLayerV2::startRender( QgsSymbolV2RenderContext& contex
   QColor penColor = mBorderColor;
   if ( context.alpha() < 1 )
   {
-    penColor.setAlphaF( context.alpha() );
-    brushColor.setAlphaF( context.alpha() );
+    brushColor.setAlphaF( brushColor.alphaF() * context.alpha() );
+    penColor.setAlphaF( penColor.alphaF() * context.alpha() );
   }
   mBrush = QBrush( brushColor );
   mPen = QPen( penColor );
@@ -106,8 +106,8 @@ void QgsSimpleMarkerSymbolLayerV2::startRender( QgsSymbolV2RenderContext& contex
   QColor selPenColor = selBrushColor == mColor ? selBrushColor : mBorderColor;
   if ( context.alpha() < 1 )
   {
-    selBrushColor.setAlphaF( context.alpha() );
-    selPenColor.setAlphaF( context.alpha() );
+    selBrushColor.setAlphaF( selBrushColor.alphaF() * context.alpha() );
+    selPenColor.setAlphaF( selPenColor.alphaF() * context.alpha() );
   }
   mSelBrush = QBrush( selBrushColor );
   mSelPen = QPen( selPenColor );
@@ -458,11 +458,14 @@ void QgsSimpleMarkerSymbolLayerV2::writeSldMarker( QDomDocument &doc, QDomElemen
   {
     angleFunc = QString( "%1 + %2" ).arg( props.value( "angle", "0" ) ).arg( mAngle );
   }
-  else if ( angle + mAngle != 0 )
+  else
   {
     angleFunc = QString::number( angle + mAngle );
   }
   QgsSymbolLayerV2Utils::createRotationElement( doc, graphicElem, angleFunc );
+
+  // <se:Opacity>
+  QgsSymbolLayerV2Utils::createOpacityElement( doc, graphicElem, props.value( "alpha", "1.0" ) );
 
   // <Displacement>
   QgsSymbolLayerV2Utils::createDisplacementElement( doc, graphicElem, mOffset );
@@ -491,6 +494,16 @@ QgsSymbolLayerV2* QgsSimpleMarkerSymbolLayerV2::createFromSld( QDomElement &elem
     double d = angleFunc.toDouble( &ok );
     if ( ok )
       angle = d;
+  }
+
+  // <se:Opacity>
+  QString alphaFunc;
+  if ( QgsSymbolLayerV2Utils::opacityFromSldElement( graphicElem, alphaFunc ) )
+  {
+    bool ok;
+    double d = alphaFunc.toDouble( &ok );
+    if ( ok )
+      color = QgsSymbolLayerV2Utils::multiplyColorOpacity( color, d );
   }
 
   QPointF offset;
@@ -719,12 +732,15 @@ void QgsSvgMarkerSymbolLayerV2::writeSldMarker( QDomDocument &doc, QDomElement &
   {
     angleFunc = QString( "%1 + %2" ).arg( props.value( "angle", "0" ) ).arg( mAngle );
   }
-  else if ( angle + mAngle != 0 )
+  else
   {
     angleFunc = QString::number( angle + mAngle );
   }
 
   QgsSymbolLayerV2Utils::createRotationElement( doc, graphicElem, angleFunc );
+
+  // <se:Opacity>
+  QgsSymbolLayerV2Utils::createOpacityElement( doc, graphicElem, props.value( "alpha", "1.0" ) );
 
   // <Displacement>
   QgsSymbolLayerV2Utils::createDisplacementElement( doc, graphicElem, mOffset );
@@ -756,6 +772,16 @@ QgsSymbolLayerV2* QgsSvgMarkerSymbolLayerV2::createFromSld( QDomElement &element
     double d = angleFunc.toDouble( &ok );
     if ( ok )
       angle = d;
+  }
+
+  // <se:Opacity>
+  QString alphaFunc;
+  if ( QgsSymbolLayerV2Utils::opacityFromSldElement( graphicElem, alphaFunc ) )
+  {
+    bool ok;
+    double d = alphaFunc.toDouble( &ok );
+    if ( ok )
+      fillColor = QgsSymbolLayerV2Utils::multiplyColorOpacity( fillColor, d );
   }
 
   QPointF offset;
@@ -1017,11 +1043,14 @@ void QgsFontMarkerSymbolLayerV2::writeSldMarker( QDomDocument &doc, QDomElement 
   {
     angleFunc = QString( "%1 + %2" ).arg( props.value( "angle", "0" ) ).arg( mAngle );
   }
-  else if ( angle + mAngle != 0 )
+  else
   {
     angleFunc = QString::number( angle + mAngle );
   }
   QgsSymbolLayerV2Utils::createRotationElement( doc, graphicElem, angleFunc );
+
+  // <se:Opacity>
+  QgsSymbolLayerV2Utils::createOpacityElement( doc, graphicElem, props.value( "alpha", "1.0" ) );
 
   // <Displacement>
   QgsSymbolLayerV2Utils::createDisplacementElement( doc, graphicElem, mOffset );
@@ -1056,6 +1085,16 @@ QgsSymbolLayerV2* QgsFontMarkerSymbolLayerV2::createFromSld( QDomElement &elemen
     double d = angleFunc.toDouble( &ok );
     if ( ok )
       angle = d;
+  }
+
+  // <se:Opacity>
+  QString alphaFunc;
+  if ( QgsSymbolLayerV2Utils::opacityFromSldElement( graphicElem, alphaFunc ) )
+  {
+    bool ok;
+    double d = alphaFunc.toDouble( &ok );
+    if ( ok )
+      color = QgsSymbolLayerV2Utils::multiplyColorOpacity( color, d );
   }
 
   QPointF offset;

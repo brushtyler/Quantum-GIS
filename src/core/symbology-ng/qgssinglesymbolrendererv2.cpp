@@ -189,6 +189,7 @@ QgsFeatureRendererV2* QgsSingleSymbolRendererV2::clone()
 void QgsSingleSymbolRendererV2::toSld( QDomDocument& doc, QDomElement &element ) const
 {
   QgsStringMap props;
+
   if ( !mRotationField.isEmpty() )
     props[ "angle" ] = QString( mRotationField ).append( "\"" ).prepend( "\"" );
   if ( !mSizeScaleField.isEmpty() )
@@ -321,6 +322,9 @@ QgsFeatureRendererV2* QgsSingleSymbolRendererV2::createFromSld( QDomElement& ele
         QgsDebugMsg( QString( "invalid geometry type: found %1" ).arg( geomType ) );
         return NULL;
     }
+
+    // set the symbol opacity from symbol layers
+    QgsSymbolLayerV2Utils::updateSymbolOpacity( symbol );
   }
 
   // and finally return the new renderer

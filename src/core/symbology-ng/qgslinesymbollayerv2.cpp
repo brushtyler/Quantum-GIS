@@ -76,7 +76,10 @@ QString QgsSimpleLineSymbolLayerV2::layerType() const
 void QgsSimpleLineSymbolLayerV2::startRender( QgsSymbolV2RenderContext& context )
 {
   QColor penColor = mColor;
-  penColor.setAlphaF( context.alpha() );
+  if ( context.alpha() < 1 )
+  {
+    penColor.setAlphaF( penColor.alphaF() * context.alpha() );
+  }
   mPen.setColor( penColor );
   double scaledWidth = context.outputLineWidth( mWidth );
   mPen.setWidthF( scaledWidth );
@@ -104,7 +107,7 @@ void QgsSimpleLineSymbolLayerV2::startRender( QgsSymbolV2RenderContext& context 
   mSelPen = mPen;
   QColor selColor = context.selectionColor();
   if ( ! selectionIsOpaque )
-    selColor.setAlphaF( context.alpha() );
+    selColor.setAlphaF( selColor.alphaF() * context.alpha() );
   mSelPen.setColor( selColor );
 }
 
@@ -183,7 +186,8 @@ void QgsSimpleLineSymbolLayerV2::toSld( QDomDocument &doc, QDomElement &element,
   symbolizerElem.appendChild( strokeElem );
 
   Qt::PenStyle penStyle = mUseCustomDashPattern ? Qt::CustomDashLine : mPenStyle;
-  QgsSymbolLayerV2Utils::lineToSld( doc, strokeElem, penStyle, mColor, mWidth,
+  QColor color = QgsSymbolLayerV2Utils::multiplyColorOpacity( mColor, props.value( "alpha", "1.0" ).toDouble() );
+  QgsSymbolLayerV2Utils::lineToSld( doc, strokeElem, penStyle, color, mWidth,
                                     &mPenJoinStyle, &mPenCapStyle, &mCustomDashVector );
 
   // <se:PerpendicularOffset>
@@ -946,6 +950,9 @@ void QgsLineDecorationSymbolLayerV2::toSld( QDomDocument &doc, QDomElement &elem
 
   // <Rotation>
   QgsSymbolLayerV2Utils::createRotationElement( doc, graphicElem, props.value( "angle", "" ) );
+
+  // <se:Opacity>
+  QgsSymbolLayerV2Utils::createOpacityElement( doc, graphicElem, props.value( "alpha", "1.0" ) );
 
   // use <VendorOption> to draw the decoration at end of the line
   symbolizerElem.appendChild( QgsSymbolLayerV2Utils::createVendorOptionElement( doc, "placement", "lastPoint" ) );

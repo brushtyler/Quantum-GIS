@@ -14,6 +14,7 @@
  ***************************************************************************/
 #include "qgsfillsymbollayerv2.h"
 #include "qgsmarkersymbollayerv2.h"
+#include "qgslinesymbollayerv2.h"
 #include "qgssymbollayerv2utils.h"
 
 #include "qgsrendercontext.h"
@@ -156,12 +157,16 @@ void QgsSimpleFillSymbolLayerV2::toSld( QDomDocument &doc, QDomElement &element,
   // <Geometry>
   QgsSymbolLayerV2Utils::createGeometryElement( doc, symbolizerElem, props.value( "geom", "" ) );
 
+  double alpha = props.value( "alpha", "1.0" ).toDouble();
+  QColor color = QgsSymbolLayerV2Utils::multiplyColorOpacity( mColor, alpha );
+  QColor borderColor = QgsSymbolLayerV2Utils::multiplyColorOpacity( mBorderColor, alpha );
+
   if ( mBrushStyle != Qt::NoBrush )
   {
     // <Fill>
     QDomElement fillElem = doc.createElement( "se:Fill" );
     symbolizerElem.appendChild( fillElem );
-    QgsSymbolLayerV2Utils::fillToSld( doc, fillElem, mBrushStyle, mColor );
+    QgsSymbolLayerV2Utils::fillToSld( doc, fillElem, mBrushStyle, color );
   }
 
   if ( mBorderStyle != Qt::NoPen )
@@ -169,7 +174,7 @@ void QgsSimpleFillSymbolLayerV2::toSld( QDomDocument &doc, QDomElement &element,
     // <Stroke>
     QDomElement strokeElem = doc.createElement( "se:Stroke" );
     symbolizerElem.appendChild( strokeElem );
-    QgsSymbolLayerV2Utils::lineToSld( doc, strokeElem, mBorderStyle, mBorderColor, mBorderWidth );
+    QgsSymbolLayerV2Utils::lineToSld( doc, strokeElem, mBorderStyle, borderColor, mBorderWidth );
   }
 
   // <se:Displacement>
@@ -505,11 +510,14 @@ void QgsSVGFillSymbolLayer::toSld( QDomDocument &doc, QDomElement &element, QgsS
   {
     angleFunc = QString( "%1 + %2" ).arg( props.value( "angle", "0" ) ).arg( mAngle );
   }
-  else if ( angle + mAngle != 0 )
+  else
   {
     angleFunc = QString::number( angle + mAngle );
   }
   QgsSymbolLayerV2Utils::createRotationElement( doc, graphicElem, angleFunc );
+
+  // <se:Opacity>
+  QgsSymbolLayerV2Utils::createOpacityElement( doc, graphicElem, props.value( "alpha", "1.0" ) );
 
   if ( mOutline )
   {
@@ -559,23 +567,32 @@ QgsSymbolLayerV2* QgsSVGFillSymbolLayer::createFromSld( QDomElement &element )
       angle = d;
   }
 
+  // <se:Opacity>
+  QString alphaFunc;
+  if ( QgsSymbolLayerV2Utils::opacityFromSldElement( graphicElem, alphaFunc ) )
+  {
+    bool ok;
+    double d = alphaFunc.toDouble( &ok );
+    if ( ok )
+      fillColor = QgsSymbolLayerV2Utils::multiplyColorOpacity( fillColor, d );
+  }
+
   QgsSVGFillSymbolLayer* sl = new QgsSVGFillSymbolLayer( path, size, angle );
   sl->setSvgFillColor( fillColor );
   sl->setSvgOutlineColor( borderColor );
   sl->setSvgOutlineWidth( borderWidth );
 
   // try to get the outline
-  QDomElement strokeElem = element.firstChildElement( "Stroke" );
-  if ( !strokeElem.isNull() )
+  QgsSymbolLayerV2 *l = QgsSymbolLayerV2Utils::createLineLayerFromSld( element );
+  if ( !l )
   {
-    QgsSymbolLayerV2 *l = QgsSymbolLayerV2Utils::createLineLayerFromSld( strokeElem );
-    if ( l )
-    {
-      QgsSymbolLayerV2List layers;
-      layers.append( l );
-      sl->setSubSymbol( new QgsLineSymbolV2( layers ) );
-    }
+    // no outline to draw
+    l = new QgsSimpleLineSymbolLayerV2( Qt::white, 1, Qt::NoPen );
   }
+
+  QgsSymbolLayerV2List layers;
+  layers.append( l );
+  sl->setSubSymbol( new QgsLineSymbolV2( layers ) );
 
   return sl;
 }
@@ -859,11 +876,14 @@ void QgsLinePatternFillSymbolLayer::toSld( QDomDocument &doc, QDomElement &eleme
   {
     angleFunc = QString( "%1 + %2" ).arg( props.value( "angle", "0" ) ).arg( mLineAngle );
   }
-  else if ( angle + mLineAngle != 0 )
+  else
   {
     angleFunc = QString::number( angle + mLineAngle );
   }
   QgsSymbolLayerV2Utils::createRotationElement( doc, graphicElem, angleFunc );
+
+  // <se:Opacity>
+  QgsSymbolLayerV2Utils::createOpacityElement( doc, graphicElem, props.value( "alpha", "1.0" ) );
 
   // <se:Displacement>
   QPointF lineOffset( sin( mLineAngle ) * mOffset, cos( mLineAngle ) * mOffset );
@@ -914,6 +934,16 @@ QgsSymbolLayerV2* QgsLinePatternFillSymbolLayer::createFromSld( QDomElement &ele
       angle = d;
   }
 
+  // <se:Opacity>
+  QString alphaFunc;
+  if ( QgsSymbolLayerV2Utils::opacityFromSldElement( graphicElem, alphaFunc ) )
+  {
+    bool ok;
+    double d = alphaFunc.toDouble( &ok );
+    if ( ok )
+      lineColor = QgsSymbolLayerV2Utils::multiplyColorOpacity( lineColor, d );
+  }
+
   double offset = 0.0;
   QPointF vectOffset;
   if ( QgsSymbolLayerV2Utils::displacementFromSldElement( graphicElem, vectOffset ) )
@@ -929,17 +959,16 @@ QgsSymbolLayerV2* QgsLinePatternFillSymbolLayer::createFromSld( QDomElement &ele
   sl->setDistance( size );
 
   // try to get the outline
-  QDomElement strokeElem = element.firstChildElement( "Stroke" );
-  if ( !strokeElem.isNull() )
+  QgsSymbolLayerV2 *l = QgsSymbolLayerV2Utils::createLineLayerFromSld( element );
+  if ( !l )
   {
-    QgsSymbolLayerV2 *l = QgsSymbolLayerV2Utils::createLineLayerFromSld( strokeElem );
-    if ( l )
-    {
-      QgsSymbolLayerV2List layers;
-      layers.append( l );
-      sl->setSubSymbol( new QgsLineSymbolV2( layers ) );
-    }
+    // no outline to draw
+    l = new QgsSimpleLineSymbolLayerV2( Qt::white, 1, Qt::NoPen );
   }
+
+  QgsSymbolLayerV2List layers;
+  layers.append( l );
+  sl->setSubSymbol( new QgsLineSymbolV2( layers ) );
 
   return sl;
 }
@@ -1097,7 +1126,7 @@ void QgsPointPatternFillSymbolLayer::toSld( QDomDocument &doc, QDomElement &elem
     QDomElement graphicFillElem = doc.createElement( "se:GraphicFill" );
     fillElem.appendChild( graphicFillElem );
 
-    // store distanceX, distanceY, displacementX, displacementY in a <VendorOption>
+    // store the pair distanceX, distanceY in a <VendorOption>
     QString dist =  QgsSymbolLayerV2Utils::encodePoint( QPointF( mDistanceX, mDistanceY ) );
     QDomElement distanceElem = QgsSymbolLayerV2Utils::createVendorOptionElement( doc, "distance", dist );
     symbolizerElem.appendChild( distanceElem );

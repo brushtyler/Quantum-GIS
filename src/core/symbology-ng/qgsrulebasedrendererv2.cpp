@@ -226,7 +226,7 @@ void QgsRuleBasedRendererV2::Rule::toSld( QDomDocument& doc, QDomElement &elemen
     QDomElement ruleElem = doc.createElement( "se:Rule" );
     element.appendChild( ruleElem );
 
-    //XXX: <se:Name> is the rule identifier, but our the Rule objects
+    //XXX: <se:Name> is the rule identifier, but the Rule objects
     // have no properties could be used as identifier. Use the label.
     QDomElement nameElem = doc.createElement( "se:Name" );
     nameElem.appendChild( doc.createTextNode( mLabel ) );
@@ -579,6 +579,9 @@ QgsRuleBasedRendererV2::Rule* QgsRuleBasedRendererV2::Rule::createFromSld( QDomE
         QgsDebugMsg( QString( "invalid geometry type: found %1" ).arg( geomType ) );
         return NULL;
     }
+
+    // set the symbol opacity from symbol layers
+    QgsSymbolLayerV2Utils::updateSymbolOpacity( symbol );
   }
 
   // and then create and return the new rule

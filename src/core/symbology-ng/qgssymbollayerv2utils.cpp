@@ -69,7 +69,7 @@ int QgsSymbolLayerV2Utils::decodeSldAlpha( QString str )
     alpha = 255;
   else if ( alpha < 0 )
     alpha = 0;
-  return alpha * 255;
+  return qRound( alpha * 255 );
 }
 
 QString QgsSymbolLayerV2Utils::encodeSldFontStyle( QFont::Style style )
@@ -446,6 +446,43 @@ QVector<qreal> QgsSymbolLayerV2Utils::decodeSldRealVector( const QString& s )
   }
 
   return resultVector;
+}
+
+void QgsSymbolLayerV2Utils::updateSymbolOpacity( QgsSymbolV2 *symbol )
+{
+  // set the symbol opacity from its symbol layers' alpha values
+  if ( symbol )
+  {
+    // get the maximum alpha value from its symbol layers
+    double maxAlphaF = 0.0;
+    for ( int i = 0; i < symbol->symbolLayerCount(); i++ )
+    {
+      maxAlphaF = qMax( symbol->symbolLayer( i )->color().alphaF(), maxAlphaF );
+    }
+
+    // set the symbol alpha value
+    symbol->setAlpha( maxAlphaF );
+
+    // update the alpha value of its symbol layers
+    if ( maxAlphaF > 0 )
+    {
+      for ( int i = 0; i < symbol->symbolLayerCount(); i++ )
+      {
+        QgsSymbolLayerV2* sl = symbol->symbolLayer( i );
+        QColor c = sl->color();
+        c.setAlphaF( sl->color().alphaF() / maxAlphaF );
+        sl->setColor( c );
+      }
+    }
+  }
+}
+
+QColor QgsSymbolLayerV2Utils::multiplyColorOpacity( const QColor &col, double factor )
+{
+  QColor color = col;
+  if ( factor < 1.0 )
+    color.setAlphaF( col.alphaF() * factor );
+  return color;
 }
 
 QIcon QgsSymbolLayerV2Utils::symbolPreviewIcon( QgsSymbolV2* symbol, QSize size )
@@ -1415,7 +1452,7 @@ void QgsSymbolLayerV2Utils::fillToSld( QDomDocument &doc, QDomElement &element, 
       if ( color.isValid() )
       {
         element.appendChild( createSvgParameterElement( doc, "fill", color.name() ) );
-        if ( color.alpha() < 255 )
+        if ( color.alphaF() < 1.0 )
           element.appendChild( createSvgParameterElement( doc, "fill-opacity", encodeSldAlpha( color.alpha() ) ) );
       }
       return;
@@ -1565,7 +1602,7 @@ void QgsSymbolLayerV2Utils::lineToSld( QDomDocument &doc, QDomElement &element,
   if ( color.isValid() )
   {
     element.appendChild( createSvgParameterElement( doc, "stroke", color.name() ) );
-    if ( color.alpha() < 255 )
+    if ( color.alphaF() < 1.0 )
       element.appendChild( createSvgParameterElement( doc, "stroke-opacity", encodeSldAlpha( color.alpha() ) ) );
   }
   if ( width > 0 )
@@ -1920,7 +1957,9 @@ bool QgsSymbolLayerV2Utils::wellKnownMarkerFromSld( QDomElement &element,
 
 void QgsSymbolLayerV2Utils::createRotationElement( QDomDocument &doc, QDomElement &element, QString rotationFunc )
 {
-  if ( !rotationFunc.isEmpty() )
+  bool ok;
+  double d = rotationFunc.toDouble( &ok );
+  if ( ( ok && !doubleNear( d, 0 ) ) || !rotationFunc.isEmpty() )
   {
     QDomElement rotationElem = doc.createElement( "se:Rotation" );
     createFunctionElement( doc, rotationElem, rotationFunc );
@@ -1941,7 +1980,9 @@ bool QgsSymbolLayerV2Utils::rotationFromSldElement( QDomElement &element, QStrin
 
 void QgsSymbolLayerV2Utils::createOpacityElement( QDomDocument &doc, QDomElement &element, QString alphaFunc )
 {
-  if ( !alphaFunc.isEmpty() )
+  bool ok;
+  double d = alphaFunc.toDouble( &ok );
+    if ( ( ok && d < 1.0 ) || !alphaFunc.isEmpty() )
   {
     QDomElement opacityElem = doc.createElement( "se:Opacity" );
     createFunctionElement( doc, opacityElem, alphaFunc );
