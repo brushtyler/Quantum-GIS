@@ -69,8 +69,12 @@ QString QgsSimpleFillSymbolLayerV2::layerType() const
 
 void QgsSimpleFillSymbolLayerV2::startRender( QgsSymbolV2RenderContext& context )
 {
-  mColor.setAlphaF( context.alpha() );
-  mBrush = QBrush( mColor, mBrushStyle );
+  QColor brushColor = mColor;
+  if ( context.alpha() < 1 )
+  {
+    brushColor.setAlphaF( brushColor.alphaF() * context.alpha() );
+  }
+  mBrush = QBrush( brushColor, mBrushStyle );
 
   // scale brush content for printout
   double rasterScaleFactor = context.renderContext().rasterScaleFactor();
@@ -84,8 +88,13 @@ void QgsSimpleFillSymbolLayerV2::startRender( QgsSymbolV2RenderContext& context 
   mSelBrush = QBrush( selColor );
   if ( selectFillStyle )
     mSelBrush.setStyle( mBrushStyle );
-  mBorderColor.setAlphaF( context.alpha() );
-  mPen = QPen( mBorderColor );
+
+  QColor penColor = mBorderColor;
+  if ( context.alpha() < 1 )
+  {
+    penColor.setAlphaF( penColor.alphaF() * context.alpha() );
+  }
+  mPen = QPen( penColor );
   mPen.setStyle( mBorderStyle );
   mPen.setWidthF( context.outputLineWidth( mBorderWidth ) );
 }
