@@ -458,6 +458,7 @@ QgisApp::QgisApp( QSplashScreen *splash, bool restorePlugins, QWidget * parent, 
   QWidget *centralWidget = this->centralWidget();
   QGridLayout *centralLayout = new QGridLayout( centralWidget );
   centralWidget->setLayout( centralLayout );
+  centralLayout->setContentsMargins( 0, 0, 0, 0 );
 
   // "theMapCanvas" used to find this canonical instance later
   mMapCanvas = new QgsMapCanvas( centralWidget, "theMapCanvas" );
@@ -3233,9 +3234,9 @@ void QgisApp::fileOpen()
       {
         enableProjectMacros();
       }
-      else
+      else if ( !QgsProject::instance()->readEntry( "Macros", "/pythonCode", QString::null ).isEmpty() )
       {
-        mInfoBar->pushWidget( mMacrosWarn, 2 );
+        mInfoBar->pushWidget( mMacrosWarn, 1 );
       }
     }
 
